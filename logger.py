@@ -1,22 +1,14 @@
 from pymodbus.client.sync import ModbusSerialClient
 from functools import partial
 import tkinter as tk
-import sys
+import sys, os
 import time
 import serial
 import re
 import datetime
-
+import json
 import argparse, sys
-input_max = 20
-output_max = 25
-current_3 = 8.34
-percent_3 = 20.95
-current_2 = 5.425 
-percent_2 = 10.475
-current_1 = 1.592
-percent_1 = 0
-restart_delay = 15
+
 disconnected_time = datetime.datetime.now()
 startup=True
 boot_log = True
@@ -26,12 +18,28 @@ parser=argparse.ArgumentParser()
 parser.add_argument("--controller_port", help="controller port",default=None)
 parser.add_argument("--O2_port", help="02 sensor port",default=None)
 args=parser.parse_args()
+previous_arduino_log_entry = ""
+controller_log_entry = ""
+def read_config_file(file_path):
+    with open(file_path, 'r') as file:
+        config = json.load(file)
+    return config
+
+def write_config_file(file_path, config):
+    with open(file_path, 'w') as file:
+        json.dump(config, file, indent=2)
+
+config_file_path = 'config.json'
+config = read_config_file(config_file_path)
+
+# Access the values from the config
 
 def map_value(value, input_min, input_max, output_min, output_max):
     return output_min + (value - input_min) * (output_max - output_min) / (input_max - input_min)
 
 class O2_sensor:
     def __init__(self, port):
+        self.calibration = config['O2_sensor_calibration']
         self.port = port
         self.disconnected = True
         if port is not None:
@@ -62,6 +70,15 @@ class O2_sensor:
             if response.isError():
                 print(f"Error in reading register: {response}")
             else:
+                current_3 = self.calibration['current_3']
+                percent_3 = self.calibration['percent_3']
+                current_2 = self.calibration['current_2']
+                percent_2 = self.calibration['percent_2']
+                current_1 = self.calibration['current_1']
+                percent_1 = self.calibration['percent_1']
+                input_max = self.calibration['input_max']
+                output_max = self.calibration['output_max']
+
                 measuring_value_channel_1 = response.registers[0] *.001
                 if measuring_value_channel_1 >= current_3:
                     mapped_value = map_value(measuring_value_channel_1, current_3, input_max, percent_3, output_max)
@@ -179,14 +196,14 @@ class App(tk.Tk):
 
         self.logging_period_entry = tk.Entry(self, font=("Arial", scale_size),width=4)
         self.logging_period_entry.grid(row=1, column=1 )
-        self.logging_period_entry.insert(0, "5000")  # Default logging period of 1 second
+        self.logging_period_entry.insert(0, config['logging_period'])  # Default logging period of 1 second
 
         self.last_logged_time = time.time()
 
         commands = ["U41", "U42", "U51", "U52", "U61", "U62", "U71", "U72"]
 
         self.entries = [[None for _ in range(2)] for _ in range(4)]
-
+        
         for i in range(4):
             for j in range(2):
                 command = commands[i * 2 + j]
@@ -200,9 +217,9 @@ class App(tk.Tk):
                     setpoint = " ON"
                 elif j == 1:
                     setpoint = " OFF"
-                entry_label = tk.Label(self, text=f"V0" + str(valveNumber) + setpoint + " (s)", font=("Arial", scale_size))
+                state = f"V0" + str(valveNumber) + setpoint
+                entry_label = tk.Label(self, text= state+" (s)", font=("Arial", scale_size))
                 entry_label.grid(row=i*2 +j +button_start , column=0,sticky="e")
-
                 entry_widget = tk.Entry(self, font=("Arial", scale_size), width=5)
                 entry_widget.grid(row=i*2 +j +button_start, column=1)
                 entry_widget.insert(0, i)
@@ -229,18 +246,29 @@ class App(tk.Tk):
 
     def update_values(self):
         oxygen_value = ""
+        global previous_arduino_log_entry
         arduino_data=""
         try:
             arduino_data = controller.get_value()
             oxygen_value = o2_sensor.get_value()
             self.oxygen_display.update_value(f"{oxygen_value}%")
             self.update_status("Running")
-            if not controller.is_connected():
+            if not controller.is_connected()and config["controller_enabled"]:
                 current_time = datetime.datetime.now()
                 time_difference = current_time - disconnected_time
                 seconds_since_event = time_difference.total_seconds()
-                countdown = restart_delay - seconds_since_event
+                countdown = config['restart_delay'] - seconds_since_event
                 status_text = f"Controller is disconnected. Restarting in {countdown:.0f} seconds"
+                if countdown <= 0:
+                    self.close_app()
+                    return
+                self.update_status(status_text)
+            if not o2_sensor.is_connected() and config["o2_sensor_enabled"]:
+                current_time = datetime.datetime.now()
+                time_difference = current_time - disconnected_time
+                seconds_since_event = time_difference.total_seconds()
+                countdown = config['restart_delay'] - seconds_since_event
+                status_text = f"O2 Sensor is disconnected. Restarting in {countdown:.0f} seconds"
                 if countdown <= 0:
                     self.close_app()
                     return
@@ -252,10 +280,11 @@ class App(tk.Tk):
             except ValueError:
                 logging_period = 1.0
             global boot_log
-            if boot_log or current_time - self.last_logged_time >= logging_period:
+            if arduino_data != previous_arduino_log_entry or boot_log or current_time - self.last_logged_time >= logging_period:
                 boot_log = False
                 self.log_data(oxygen_value)
                 self.last_logged_time = current_time
+            previous_arduino_log_entry = arduino_data
             self.update_indicators(arduino_data[1:11])
         except serial.serialutil.SerialException as e:
             print(f"Serial exception: {e}")
@@ -273,7 +302,8 @@ class App(tk.Tk):
     def update_indicators(self, status_bits):
         on_text = ""
         off_text = ""
-
+        global controller_log_entry
+        controller_log_entry = ""
         for i, bit in enumerate(status_bits):
             if i <= 2:
                
@@ -292,6 +322,10 @@ class App(tk.Tk):
                 self.indicators[i].config(text=on_text)
             elif bit == '0':
                 self.indicators[i].config(text=off_text)
+            indicator_text = self.indicators[i].cget("text")
+            parts = indicator_text.split(":")
+            desired_text = parts[1].strip()
+            controller_log_entry += desired_text + ", "
    
    
     def send_string(self, command, entry):
@@ -299,10 +333,22 @@ class App(tk.Tk):
         string_to_send = f"{command}{digits}\n"
         print (string_to_send)
         controller.arduino_serial_port.write(string_to_send.encode())
+
     def log_data(self, oxygen_value):
         # Log the data to a file
-        with open("data_log.txt", "a") as log_file:
-            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - O\u2082: {oxygen_value}%\n")
+        today = datetime.date.today()
+        date_str = today.strftime('%Y-%b-%d')
+        log_file_name = f"../MABR_data/{date_str}.csv"
+        new_day = False
+        if not os.path.exists(log_file_name):
+            new_day = True
+        with open(log_file_name, 'a') as log_file:
+            if new_day:
+                # If the log file is new, write an initial log message
+                initial_log_message = "Timestamp,O\u2082(%),V01,V02,V03,B1,B2,B3,V04,V05,V06,V07\n"
+                log_file.write(f"{initial_log_message}\n")
+            print (controller_log_entry)
+            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, {oxygen_value}, {controller_log_entry}\n")
     def update_arduino_fields(self, arduino_data):
         arduino_data = arduino_data.strip()  # Remove any whitespace or newline characters
         global startup

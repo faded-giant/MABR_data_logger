@@ -1,0 +1,16 @@
+{
+  "logging_period": 300,
+  "restart_delay" : 20,
+  "O2_sensor_calibration": {
+    "input_max": 20,
+    "output_max" : 25,
+    "current_3": 8.34,
+    "percent_3": 20.95,
+    "current_2": 5.425,
+    "percent_2": 10.475,
+    "current_1": 1.592,
+    "percent_1": 0
+  },
+  "o2_sensor_enabled": true,
+  "controller_enabled": false
+}
