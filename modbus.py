@@ -15,30 +15,29 @@ current_2 = 5.425
 percent_2 = 10.475
 current_1 = 1.592
 percent_1 = 0
-output_max = 25
 scale_size = 22
 button_start = 2
 startup=True
 
 parser=argparse.ArgumentParser()
 
-parser.add_argument("--controller", help="controller port")
-parser.add_argument("--O2_sensor", help="02 sensor port")
+parser.add_argument("--controller_port", help="controller port",default=None)
+parser.add_argument("--O2_port", help="02 sensor port",default=None)
 
 args=parser.parse_args()
 
-print(f"Args: {args}\nCommand Line: {sys.argv}\nfoo: {args.controller}\nbar: {args.O2_sensor}")
+print(f"Args: {args}\nCommand Line: {sys.argv}\nfoo: {args.controller_port}\nbar: {args.O2_port}")
 print(f"Dict format: {vars(args)}")
 
-if args.controller is not None:
-    arduino_serial_port = serial.Serial(port=args.controller, baudrate=115200, timeout=1)
+if args.controller_port is not None:
+    arduino_serial_port = serial.Serial(port=args.controller_port, baudrate=115200, timeout=1)
 
 def map_value(value, input_min, input_max, output_min, output_max):
     return output_min + (value - input_min) * (output_max - output_min) / (input_max - input_min)
-if args.O2_sensor is not None:
+if args.O2_port is not None:
     client = ModbusSerialClient(
         method="rtu",
-        port=args.O2_sensor,  # Replace with your COM port
+        port=args.O2_port,  # Replace with your COM port
         baudrate=9600,
         bytesize=8,
         parity="N",
@@ -157,7 +156,7 @@ class App(tk.Tk):
 
         self.logging_period_entry = tk.Entry(self, font=("Arial", scale_size),width=4)
         self.logging_period_entry.grid(row=1, column=1 )
-        self.logging_period_entry.insert(0, "1")  # Default logging period of 1 second
+        self.logging_period_entry.insert(0, "5000")  # Default logging period of 1 second
 
         self.last_logged_time = time.time()
 
