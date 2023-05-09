@@ -141,10 +141,8 @@ class ParameterDisplay(tk.Frame):
         self.value.set(new_value)
 
 o2_sensor = O2_sensor(args.O2_port)
-print(o2_sensor.is_connected())
-print(o2_sensor.get_value())
 controller = Controller(args.controller_port)
-print(controller.is_connected())
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -336,7 +334,6 @@ class App(tk.Tk):
     def send_string(self, command, entry):
         digits = entry.get()
         string_to_send = f"{command}{digits}\n"
-        print (string_to_send)
         controller.arduino_serial_port.write(string_to_send.encode())
 
     def log_data(self, oxygen_value):
@@ -352,7 +349,6 @@ class App(tk.Tk):
                 # If the log file is new, write an initial log message
                 initial_log_message = "Timestamp,O\u2082(%),V01,V02,V03,B1,B2,B3,V04,V05,V06,V07\n"
                 log_file.write(f"{initial_log_message}\n")
-            print (controller_log_entry)
             log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, {oxygen_value}, {controller_log_entry}\n")
     def update_arduino_fields(self, arduino_data):
         arduino_data = arduino_data.strip()  # Remove any whitespace or newline characters
@@ -360,7 +356,7 @@ class App(tk.Tk):
         if arduino_data.startswith('#') and startup:
             startup=False
             hex_values = re.findall('[0-9A-Fa-f]{4}', arduino_data[11:])  # Extract 4-digit hex values
-            print(f"Hex values: {hex_values}")
+    
             for i in range(len(hex_values)):
                 row = i // 2
                 col = i % 2
@@ -375,7 +371,7 @@ class App(tk.Tk):
         if arduino_data.startswith('#'):
             startup=False
             hex_values = re.findall('[0-9A-Fa-f]{4}', arduino_data[11:])  # Extract 4-digit hex values
-            print(f"Hex values: {hex_values}")
+    
             for i in range(len(hex_values)):
                 row = i // 2
                 col = i % 2
@@ -393,17 +389,18 @@ class App(tk.Tk):
 
 
 # The rest of your existing code goes here
+def on_closing():
+    controller.arduino_serial_port.close()
+    app.destroy()
 time.sleep(2)
 if __name__ == "__main__":
     app = App()
+    app.protocol("WM_DELETE_WINDOW", on_closing)
     app.mainloop()
 
 
 # The rest of your existing code goes here
 
 # Make sure to close the serial port when the application is closed
-def on_closing():
-    controller.arduino_serial_port.close()
-    app.destroy()
 
-app.protocol("WM_DELETE_WINDOW", on_closing)
+    
