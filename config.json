@@ -11,6 +11,6 @@
     "current_1": 1.592,
     "percent_1": 0
   },
-  "o2_sensor_enabled": true,
+  "o2_sensor_enabled": false,
   "controller_enabled": false
 }

@@ -229,6 +229,11 @@ class App(tk.Tk):
                 send_button = tk.Button(self, text=f"Update", font=("Arial", scale_size),
                                         command=partial(self.send_string, command, entry_widget))
                 send_button.grid(row=i*2 +j +button_start, column=2,sticky="w")
+        for i in range(4):
+            send_button = tk.Button(self, text=f"Toggle", font=("Arial", scale_size),
+                                        command=partial(self.send_string, "U" + str(i+4)+"3",entry_widget))
+            send_button.grid(row=i +7, column=4,sticky="w")
+
 
         self.update_values()
 
