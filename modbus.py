@@ -5,6 +5,8 @@ import sys
 import time
 import serial
 import re
+
+import argparse, sys
 # Calibration points
 input_max = 20
 current_3 = 8.34
@@ -18,22 +20,31 @@ scale_size = 22
 button_start = 2
 startup=True
 
+parser=argparse.ArgumentParser()
 
+parser.add_argument("--controller", help="controller port")
+parser.add_argument("--O2_sensor", help="02 sensor port")
 
-arduino_serial_port = serial.Serial(port=sys.argv[2], baudrate=115200, timeout=1)
+args=parser.parse_args()
+
+print(f"Args: {args}\nCommand Line: {sys.argv}\nfoo: {args.controller}\nbar: {args.O2_sensor}")
+print(f"Dict format: {vars(args)}")
+
+if args.controller is not None:
+    arduino_serial_port = serial.Serial(port=args.controller, baudrate=115200, timeout=1)
 
 def map_value(value, input_min, input_max, output_min, output_max):
     return output_min + (value - input_min) * (output_max - output_min) / (input_max - input_min)
-
-client = ModbusSerialClient(
-    method="rtu",
-    port=sys.argv[1],  # Replace with your COM port
-    baudrate=9600,
-    bytesize=8,
-    parity="N",
-    stopbits=1,
-    timeout=1
-)
+if args.O2_sensor is not None:
+    client = ModbusSerialClient(
+        method="rtu",
+        port=args.O2_sensor,  # Replace with your COM port
+        baudrate=9600,
+        bytesize=8,
+        parity="N",
+        stopbits=1,
+        timeout=1
+    )
 
 
 def get_oxygen_value():
