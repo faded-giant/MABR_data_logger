@@ -9,6 +9,16 @@ import datetime
 import json
 import argparse, sys
 import traceback
+import threading
+
+# para output:#:start  18:pH 19:ORP(mv) 48:NH4 (mg/L) 106:NO3 mg/L 212: ODO mg/L 
+log_buffer = ["-", "-", "-", "-", "-", "-","-","-","-","-","-","-","-","-","-","-"]
+pH_idx = 1
+orp_idx = 2
+NH4_idx = 3
+NO3_idx = 4
+ODO_idx = 5
+sonde_log_entry = ""
 try:
     disconnected_time = datetime.datetime.now()
     startup=True
@@ -18,6 +28,7 @@ try:
     parser=argparse.ArgumentParser()
     parser.add_argument("--controller_port", help="controller port",default=None)
     parser.add_argument("--O2_port", help="02 sensor port",default=None)
+    parser.add_argument("--sonde_port", help="sonde port",default=None)
     args=parser.parse_args()
     previous_arduino_log_entry = ""
     controller_log_entry = ""
@@ -37,6 +48,37 @@ try:
 
     def map_value(value, input_min, input_max, output_min, output_max):
         return output_min + (value - input_min) * (output_max - output_min) / (input_max - input_min)
+
+
+    class Sonde:
+        def __init__(self, port):
+            self.port = port
+            self.disconnected = True
+            self.serial_data = ""
+            if port is not None:
+                self.disconnected = False
+                self.serial_port = serial.Serial(port=port, baudrate=9600, timeout=1)
+                self.serial_port.write("run\r\n".encode())
+                self.reader_thread = threading.Thread(target=self.read_from_port)
+                self.reader_thread.daemon = True  # Ensure thread closes when main program closes
+                self.reader_thread.start()
+
+        def is_connected(self):
+            return not self.disconnected
+
+        def get_value(self):
+            return self.serial_data
+
+        def read_from_port(self):
+            while not self.disconnected:
+                try:
+                    if self.serial_port.in_waiting > 0:
+                        self.serial_data = self.serial_port.readline().decode("utf-8").strip()
+                        self.serial_port.flush()
+                except:
+                    global disconnected_time
+                    disconnected_time = datetime.datetime.now()
+                    self.disconnected = True
 
     class O2_sensor:
         def __init__(self, port):
@@ -110,7 +152,7 @@ try:
             self.disconnected = True
             if port is not None:
                 self.disconnected = False
-                self.arduino_serial_port = serial.Serial(port=args.controller_port, baudrate=115200, timeout=1)
+                self.arduino_serial_port = serial.Serial(port=args.controller_port, baudrate=115200, timeout=.1)
         def is_connected(self):
             return not self.disconnected
         def get_value(self):
@@ -132,10 +174,10 @@ try:
             self.parameter_name = parameter_name
             self.value = tk.StringVar()
 
-            self.label = tk.Label(self, text=f"{self.parameter_name}", font=("Arial", scale_size*2))
+            self.label = tk.Label(self, text=f"{self.parameter_name}", font=("Arial", scale_size))
             self.label.grid(row=row, column=column)
 
-            self.value_label = tk.Label(self, textvariable=self.value, font=("Arial", scale_size*2))
+            self.value_label = tk.Label(self, textvariable=self.value, font=("Arial", scale_size))
             self.value_label.grid(row=row, column=column+1)
 
         def update_value(self, new_value):
@@ -143,7 +185,7 @@ try:
 
     o2_sensor = O2_sensor(args.O2_port)
     controller = Controller(args.controller_port)
-
+    sonde = Sonde(args.sonde_port)
 
     class App(tk.Tk):
         def __init__(self):
@@ -165,21 +207,21 @@ try:
             self.grid_columnconfigure(5, weight=0)  # Add this line
             self.status_label = tk.Label(self, text="Status: Initializing...", font=("Arial", 14))
             self.status_label.grid(row=0, column=0, columnspan=6, sticky="w")
-
-            self.oxygen_display = ParameterDisplay(self, "-", 0, 0)
-            self.oxygen_display.grid(row=button_start+7, column=2)
-            self.no3_display = ParameterDisplay(self, "NO\u2083:", 1, 0)
+            
+            self.spare2 = ParameterDisplay(self, "-", 0, 0)
+            self.spare2.grid(row=button_start+7, column=2)
+            self.no3_display = ParameterDisplay(self, "NO\u2083 (mg/L):", 1, 0)
             self.no3_display.grid(row=button_start+1, column=2)
-            self.DO_display = ParameterDisplay(self, "DO:", 2, 0)
+            self.DO_display = ParameterDisplay(self, "ODO(mg/L):", 2, 0)
             self.DO_display.grid(row=button_start+2, column=2)
-            self.oxygen_display = ParameterDisplay(self, "-", 3, 0)
-            self.oxygen_display.grid(row=button_start+3, column=2)
-            self.oxygen_display = ParameterDisplay(self, "-", 4, 0)
-            self.oxygen_display.grid(row=button_start+4, column=2)
-            self.oxygen_display = ParameterDisplay(self, "-", 5, 0)
-            self.oxygen_display.grid(row=button_start+5, column=2)
-            self.oxygen_display = ParameterDisplay(self, "-", 6, 0)
-            self.oxygen_display.grid(row=button_start+6, column=2)
+            self.ph_display = ParameterDisplay(self, "pH:", 3, 0)
+            self.ph_display.grid(row=button_start+3, column=2)
+            self.no4_display = ParameterDisplay(self, "NO\u2084 (mg/L):", 4, 0)
+            self.no4_display.grid(row=button_start+4, column=2)
+            self.orp_display = ParameterDisplay(self, "ORP (mV):", 5, 0)
+            self.orp_display.grid(row=button_start+5, column=2)
+            self.spare1_dis = ParameterDisplay(self, "-", 6, 0)
+            self.spare1_dis.grid(row=button_start+6, column=2)
             self.oxygen_display = ParameterDisplay(self, "O\u2082:", 7, 0)
             self.oxygen_display.grid(row=button_start, column=2)
 
@@ -259,11 +301,29 @@ try:
         def update_values(self):
             oxygen_value = ""
             global previous_arduino_log_entry
+            global sonde_log_entry
             arduino_data=""
             try:
                 arduino_data = controller.get_value()
                 oxygen_value = o2_sensor.get_value()
+                sonde_data = sonde.get_value()
+                sonde_data = sonde_data.split(" ")
+                sonde_log_entry = ','.join(sonde_data[1:])
+                
+                if sonde_data[0] == "#":
+                    self.ph_display.update_value(sonde_data[pH_idx])
+                    self.orp_display.update_value(sonde_data[orp_idx])
+                    self.no4_display.update_value(sonde_data[NH4_idx])
+                    self.no3_display.update_value(sonde_data[NO3_idx])
+                    self.DO_display.update_value(sonde_data[ODO_idx])
+                    log_buffer[11] = sonde_data[pH_idx]
+                    log_buffer[12] = sonde_data[orp_idx]
+                    log_buffer[13] = sonde_data[NH4_idx]
+                    log_buffer[14] = sonde_data[NO3_idx]
+                    log_buffer[15] = sonde_data[ODO_idx]
+
                 self.oxygen_display.update_value(f"{oxygen_value}%")
+                log_buffer[0] = str(oxygen_value)
                 self.update_status("Running")
                 if not controller.is_connected()and config["controller_enabled"]:
                     current_time = datetime.datetime.now()
@@ -309,7 +369,11 @@ try:
             on_text = ""
             off_text = ""
             global controller_log_entry
-            controller_log_entry = ""
+            global sonde_log_entry
+            controller_log_entry =""
+            if controller.disconnected:
+                 for i in range(1,11):
+                    log_buffer[i] = "-"
             for i, bit in enumerate(status_bits):
                 if i <= 2:
                 
@@ -331,7 +395,7 @@ try:
                 indicator_text = self.indicators[i].cget("text")
                 parts = indicator_text.split(":")
                 desired_text = parts[1].strip()
-                controller_log_entry += desired_text + ", "
+                log_buffer[i+1] = desired_text
     
     
         def send_string(self, command, entry):
@@ -342,6 +406,7 @@ try:
         def log_data(self, oxygen_value):
             # Log the data to a file
             today = datetime.date.today()
+            global sonde_log_entry
             date_str = today.strftime('%Y-%b-%d')
             log_file_name = f"../MABR_data/{date_str}.csv"
             new_day = False
@@ -350,9 +415,12 @@ try:
             with open(log_file_name, 'a') as log_file:
                 if new_day:
                     # If the log file is new, write an initial log message
-                    initial_log_message = "Timestamp,O\u2082(%),V01,V02,V03,B1,B2,B3,V04,V05,V06,V07\n"
+              
+                    initial_log_message = "Timestamp,O\u2082(%),V01,V02,V03,B1,B2,B3,V04,V05,V06,V07,pH,ORP (mV),NO\u2084 (mg/L),NO\u2083 (mg/L),ODO(mg/L)\n"
                     log_file.write(f"{initial_log_message}\n")
-                log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, {oxygen_value}, {controller_log_entry}\n")
+                
+                global log_buffer   
+                log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, {','.join(log_buffer)}\n")
         def update_arduino_fields(self, arduino_data):
             arduino_data = arduino_data.strip()  # Remove any whitespace or newline characters
             global startup

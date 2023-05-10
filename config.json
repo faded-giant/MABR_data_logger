@@ -1,5 +1,5 @@
 {
-  "logging_period": 300,
+  "logging_period": 1,
   "restart_delay" : 20,
   "O2_sensor_calibration": {
     "input_max": 20,
