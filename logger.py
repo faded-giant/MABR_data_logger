@@ -153,7 +153,7 @@ class App(tk.Tk):
         #self.grid_rowconfigure(0, weight=1)
         #for i in range(1, 6):
             #self.grid_rowconfigure(i, weight=0)
-        self.close_button = tk.Button(self, text="Close", font=("Arial", 14), command=self.close_app)
+        self.close_button = tk.Button(self, text="Close", font=("Arial", 14), command=on_closing)
         self.close_button.grid(row=0, column=6, columnspan=6)
 
         self.grid_columnconfigure(0, weight=1)
@@ -389,18 +389,18 @@ class App(tk.Tk):
 
 
 # The rest of your existing code goes here
+
 def on_closing():
     controller.arduino_serial_port.close()
     app.destroy()
+
 time.sleep(2)
 if __name__ == "__main__":
+    global app
     app = App()
     app.protocol("WM_DELETE_WINDOW", on_closing)
     app.mainloop()
 
 
-# The rest of your existing code goes here
-
-# Make sure to close the serial port when the application is closed
 
     

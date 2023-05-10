@@ -1,6 +1,6 @@
 #!/bin/bash
 
-while true; do
+#while true; do
     OXY_PORT=$(./test.sh | grep FT232  | head -n1 | awk '{print $1;}')
     ARD_PORT=$(./test.sh | grep Arduino  | head -n1 | awk '{print $1;}')
     echo $(date): System started
@@ -27,5 +27,5 @@ while true; do
     sudo python3 ./logger.py $controller_arg $o2_arg
 
     # Wait for 5 seconds before the next iteration
-    sleep 5
-done
+    #sleep 5
+#done
