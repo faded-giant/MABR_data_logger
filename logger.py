@@ -299,15 +299,9 @@ try:
                 previous_arduino_log_entry = arduino_data
                 self.update_indicators(arduino_data[1:11])
             except serial.serialutil.SerialException as e:
-                print(f"Serial exception: {e}")
-                controller.arduino_serial_port.close()
-                self.destroy()
-                return
+                pass
             except Exception as e:
-                print(f"Unexpected exception: {e}")
-                controller.arduino_serial_port.close()
-                self.destroy()
-                return
+                pass
             self.after(1, self.update_values)
 
         # The rest of your existing App class code goes here
