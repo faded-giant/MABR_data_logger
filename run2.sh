@@ -1,9 +1,9 @@
 #!/bin/bash
 cd ~/Desktop/ubuntu_logger
 #while true; do
-    OXY_PORT=$(./test.sh | grep FT232  | head -n1 | awk '{print $1;}')
-    ARD_PORT=$(./test.sh | grep Arduino  | head -n1 | awk '{print $1;}')
-    SONDE_PORT=$(./test.sh | grep DSCJx11A920  | head -n1 | awk '{print $1;}')
+    OXY_PORT=$(./get_port.sh | grep FT232  | head -n1 | awk '{print $1;}')
+    ARD_PORT=$(./get_port.sh | grep Arduino  | head -n1 | awk '{print $1;}')
+    SONDE_PORT=$(./get_port.sh | grep DSCJx11A920  | head -n1 | awk '{print $1;}')
     echo $(date): System started
 
     if [[ -n "$OXY_PORT" ]]; then
