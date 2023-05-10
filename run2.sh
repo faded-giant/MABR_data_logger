@@ -1,5 +1,5 @@
 #!/bin/bash
-
+cd ~/Desktop/ubuntu_logger
 #while true; do
     OXY_PORT=$(./test.sh | grep FT232  | head -n1 | awk '{print $1;}')
     ARD_PORT=$(./test.sh | grep Arduino  | head -n1 | awk '{print $1;}')

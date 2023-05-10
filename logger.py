@@ -391,12 +391,14 @@ class App(tk.Tk):
 # The rest of your existing code goes here
 
 def on_closing():
-    controller.arduino_serial_port.close()
+    try:
+        controller.arduino_serial_port.close()
+    except:
+        pass
     app.destroy()
 
 time.sleep(2)
 if __name__ == "__main__":
-    global app
     app = App()
     app.protocol("WM_DELETE_WINDOW", on_closing)
     app.mainloop()
