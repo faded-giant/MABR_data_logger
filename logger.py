@@ -183,10 +183,13 @@ class App(tk.Tk):
         self.oxygen_display.grid(row=button_start, column=2)
 
         self.indicators = []
-        for i in range(11):
-            indicator = tk.Label(self,font=("Arial", scale_size*2))
-            indicator.grid(row=i+1, column=3,sticky="w")
-            self.indicators.append(indicator)
+        try:
+            for i in range(11):
+                indicator = tk.Label(self,font=("Arial", scale_size*2))
+                indicator.grid(row=i+1, column=3,sticky="w")
+                self.indicators.append(indicator)
+        except:
+            print("Error in creating indicators")
 
 
         self.logging_period_label = tk.Label(self, text="Logging Period (s):", font=("Arial", scale_size))
@@ -201,36 +204,41 @@ class App(tk.Tk):
         commands = ["U41", "U42", "U51", "U52", "U61", "U62", "U71", "U72"]
 
         self.entries = [[None for _ in range(2)] for _ in range(4)]
-        
-        for i in range(4):
-            for j in range(2):
-                command = commands[i * 2 + j]
-                valveNumber = i + 4
-                setpoint = ""
-                if i < 2 and j == 0:
-                    setpoint = " CW"
-                elif i < 2 and j == 1:
-                    setpoint = " CCW"
-                elif j == 0:
-                    setpoint = " ON"
-                elif j == 1:
-                    setpoint = " OFF"
-                state = f"V0" + str(valveNumber) + setpoint
-                entry_label = tk.Label(self, text= state+" (s)", font=("Arial", scale_size))
-                entry_label.grid(row=i*2 +j +button_start , column=0,sticky="e")
-                entry_widget = tk.Entry(self, font=("Arial", scale_size), width=5)
-                entry_widget.grid(row=i*2 +j +button_start, column=1)
-                entry_widget.insert(0, i)
+        try:
+            for i in range(4):
+                for j in range(2):
+                    command = commands[i * 2 + j]
+                    valveNumber = i + 4
+                    setpoint = ""
+                    if i < 2 and j == 0:
+                        setpoint = " CW"
+                    elif i < 2 and j == 1:
+                        setpoint = " CCW"
+                    elif j == 0:
+                        setpoint = " ON"
+                    elif j == 1:
+                        setpoint = " OFF"
+                    state = f"V0" + str(valveNumber) + setpoint
+                    entry_label = tk.Label(self, text= state+" (s)", font=("Arial", scale_size))
+                    entry_label.grid(row=i*2 +j +button_start , column=0,sticky="e")
+                    entry_widget = tk.Entry(self, font=("Arial", scale_size), width=5)
+                    entry_widget.grid(row=i*2 +j +button_start, column=1)
+                    entry_widget.insert(0, i)
 
-                self.entries[i][j] = entry_widget
+                    self.entries[i][j] = entry_widget
 
-                send_button = tk.Button(self, text=f"Update", font=("Arial", scale_size),
-                                        command=partial(self.send_string, command, entry_widget))
-                send_button.grid(row=i*2 +j +button_start, column=2,sticky="w")
-        for i in range(4):
-            send_button = tk.Button(self, text=f"Toggle", font=("Arial", scale_size),
-                                        command=partial(self.send_string, "U" + str(i+4)+"3",entry_widget))
-            send_button.grid(row=i +7, column=4,sticky="w")
+                    send_button = tk.Button(self, text=f"Update", font=("Arial", scale_size),
+                                            command=partial(self.send_string, command, entry_widget))
+                    send_button.grid(row=i*2 +j +button_start, column=2,sticky="w")
+        except:
+            print("Error in creating entries")
+        try:
+            for i in range(4):
+                send_button = tk.Button(self, text=f"Toggle", font=("Arial", scale_size),
+                                            command=partial(self.send_string, "U" + str(i+4)+"3",entry_widget))
+                send_button.grid(row=i +7, column=4,sticky="w")
+        except:
+            print("Error in creating toggle buttons")
 
 
         self.update_values()
@@ -371,20 +379,22 @@ class App(tk.Tk):
         if arduino_data.startswith('#'):
             startup=False
             hex_values = re.findall('[0-9A-Fa-f]{4}', arduino_data[11:])  # Extract 4-digit hex values
-    
-            for i in range(len(hex_values)):
-                row = i // 2
-                col = i % 2
-                if row < len(self.entries) and col < len(self.entries[row]):
-                    entry_widget = self.entries[row][col]
-                    decimal_value = int(hex_values[i], 16)
-                    current_value = entry_widget.get()
-                    if current_value != str(decimal_value):
-                        # Set the background color to red if the hex value doesn't match
-                        entry_widget.config(bg="red")
-                    else:
-                        # Set the background color to green if the hex value matches
-                        entry_widget.config(bg="green")
+            try:
+                for i in range(len(hex_values)):
+                    row = i // 2
+                    col = i % 2
+                    if row < len(self.entries) and col < len(self.entries[row]):
+                        entry_widget = self.entries[row][col]
+                        decimal_value = int(hex_values[i], 16)
+                        current_value = entry_widget.get()
+                        if current_value != str(decimal_value):
+                            # Set the background color to red if the hex value doesn't match
+                            entry_widget.config(bg="red")
+                        else:
+                            # Set the background color to green if the hex value matches
+                            entry_widget.config(bg="green")
+            except:
+                pass
 # The rest of your existing code goes here
 
 
