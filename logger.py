@@ -24,7 +24,7 @@ try:
     startup=True
     boot_log = True
     button_start = 2
-    scale_size = 22
+    scale_size = 18
     parser=argparse.ArgumentParser()
     parser.add_argument("--controller_port", help="controller port",default=None)
     parser.add_argument("--O2_port", help="02 sensor port",default=None)
