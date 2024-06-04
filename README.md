@@ -11,3 +11,4 @@
 
 6. Replace ```current_1,current_2,current_3``` repectfully with the values noted in previous step.
 7. Verify ```Mapped Value``` is as expected for the 3 calibration gases.
+8. If all is expected, inside ```config.json```, update the ```current_1,current_2,current_3``` fields in the ```O2_sensor_calibration``` object.
