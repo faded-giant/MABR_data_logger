@@ -10,15 +10,18 @@ import json
 import argparse, sys
 import traceback
 import threading
-
-# para output:#:start  18:pH 19:ORP(mv) 48:NH4 (mg/L) 106:NO3 mg/L 212: ODO mg/L 
-log_buffer = ["-", "-", "-", "-", "-", "-","-","-","-","-","-","-","-","-","-","-"]
+from opcua import ua, Server
+# para output:#:start  18:pH 19:ORP(mv) 48:NH4 (mg/L) 106:NO3 mg/L 212: ODO mg/L 1: Temp 5:Conduct
+log_buffer = ["-", "-", "-", "-", "-", "-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-"]
 pH_idx = 1
 orp_idx = 2
 NH4_idx = 3
 NO3_idx = 4
 ODO_idx = 5
+temp_idx = 6
+cond_idx = 7
 sonde_log_entry = ""
+o2_mA = ""
 try:
     disconnected_time = datetime.datetime.now()
     startup=True
@@ -57,8 +60,8 @@ try:
             self.serial_data = ""
             if port is not None:
                 self.disconnected = False
-                self.serial_port = serial.Serial(port=port, baudrate=9600, timeout=1)
-                self.serial_port.write("run\r\n".encode())
+                self.serial_port = serial.Serial(port=port, baudrate=9600, timeout=1) 
+                #self.serial_port.write("run \r".encode())
                 self.reader_thread = threading.Thread(target=self.read_from_port)
                 self.reader_thread.daemon = True  # Ensure thread closes when main program closes
                 self.reader_thread.start()
@@ -94,16 +97,22 @@ try:
             bytesize=8,
             parity="N",
             stopbits=1,
-            timeout=1
+            timeout=.2
         )
+            self.oxygen_value = -1.0
+            self.reader_thread = threading.Thread(target=self.loop)
+            self.reader_thread.daemon = True  # Ensure thread closes when main program closes
+            self.reader_thread.start()
         def is_connected(self):
             return not self.disconnected
         def get_value(self):
-            if self.disconnected:
-                return -1.0
+        	return self.oxygen_value
+        def loop(self):
+            while True:
+                self.get_data()
+        def get_data(self):
             try:
                 self.client.connect()
-
                 slave_address = 5
                 register_address = 7
                 number_of_registers = 1
@@ -112,6 +121,7 @@ try:
 
                 if response.isError():
                     print(f"Error in reading register: {response}")
+                    self.oxygen_value = "ERR"
                 else:
                     current_3 = self.calibration['current_3']
                     percent_3 = self.calibration['percent_3']
@@ -123,6 +133,8 @@ try:
                     output_max = self.calibration['output_max']
 
                     measuring_value_channel_1 = response.registers[0] *.001
+                    global o2_mA
+                    o2_mA = measuring_value_channel_1
                     if measuring_value_channel_1 >= current_3:
                         mapped_value = map_value(measuring_value_channel_1, current_3, input_max, percent_3, output_max)
                     elif measuring_value_channel_1 >= current_2:
@@ -138,12 +150,12 @@ try:
 
                 #print(f"Raw value: {measuring_value_channel_1} mA, Mapped value: {mapped_value}%")
                     self.client.close()
-                    return f"{mapped_value:.2f}"
+                    self.oxygen_value = f"{mapped_value:.2f}"
             except:
                 print("Error in reading register")
                 self.disconnected = True
                 self.client.close()
-                return -1.0
+                self.oxygen_value = "ERR"
 
         
     class Controller:
@@ -190,7 +202,17 @@ try:
     class App(tk.Tk):
         def __init__(self):
             super().__init__()
-            self.title("Parameter Display GUI")
+            self.server = Server()
+            self.server.set_endpoint("opc.tcp://localhost:4841/opc/")
+            self.server.set_server_name("MABR")
+            self.uri = "http://examples.freeopcua.github.io"
+            self.idx = self.server.register_namespace(self.uri)
+            self.objects = self.server.get_objects_node()
+
+            # populating our address space
+            self.opc_data = self.objects.add_object(self.idx, "MABR_DATA")
+            self.opc_pressure = self.opc_data.add_variable(self.idx, "pressure", -1.0)
+            self.opc_pressure.set_writable()    # Set MyVariable to be writable by clients
             self.attributes("-fullscreen", True)
             self.geometry("{0}x{1}+0+0".format(self.winfo_screenwidth(), self.winfo_screenheight()))
             #self.grid_rowconfigure(0, weight=1)
@@ -208,7 +230,7 @@ try:
             self.status_label = tk.Label(self, text="Status: Initializing...", font=("Arial", 14))
             self.status_label.grid(row=0, column=0, columnspan=6, sticky="w")
             
-            self.spare2 = ParameterDisplay(self, "-", 0, 0)
+            self.spare2 = ParameterDisplay(self, "Temp (C):", 0, 0)
             self.spare2.grid(row=button_start+7, column=2)
             self.no3_display = ParameterDisplay(self, "NO\u2083 (mg/L):", 1, 0)
             self.no3_display.grid(row=button_start+1, column=2)
@@ -216,15 +238,19 @@ try:
             self.DO_display.grid(row=button_start+2, column=2)
             self.ph_display = ParameterDisplay(self, "pH:", 3, 0)
             self.ph_display.grid(row=button_start+3, column=2)
-            self.no4_display = ParameterDisplay(self, "NO\u2084 (mg/L):", 4, 0)
+            self.no4_display = ParameterDisplay(self, "NH\u2084 (mg/L):", 4, 0)
             self.no4_display.grid(row=button_start+4, column=2)
             self.orp_display = ParameterDisplay(self, "ORP (mV):", 5, 0)
             self.orp_display.grid(row=button_start+5, column=2)
-            self.spare1_dis = ParameterDisplay(self, "-", 6, 0)
+            self.spare1_dis = ParameterDisplay(self, "Press (psi):", 6, 0)
             self.spare1_dis.grid(row=button_start+6, column=2)
             self.oxygen_display = ParameterDisplay(self, "O\u2082:", 7, 0)
             self.oxygen_display.grid(row=button_start, column=2)
-
+            self.flow_display = ParameterDisplay(self, "Flow (gpm):", 8, 0)
+            self.flow_display.grid(row=button_start+8, column=2)
+            self.flow_temp_display = ParameterDisplay(self, "Flow Temp (C):", 8, 0)
+            self.flow_temp_display.grid(row=button_start+9, column=2)
+            self.server.start()
             self.indicators = []
             try:
                 for i in range(11):
@@ -293,6 +319,7 @@ try:
         # The rest of
         def close_app(self):
             try:
+                self.server.stop()
                 controller.arduino_serial_port.close()
             except:
                 pass
@@ -308,6 +335,7 @@ try:
                 oxygen_value = o2_sensor.get_value()
                 sonde_data = sonde.get_value()
                 sonde_data = sonde_data.split(" ")
+                #print(sonde_data)
                 sonde_log_entry = ','.join(sonde_data[1:])
                 
                 if sonde_data[0] == "#":
@@ -316,13 +344,15 @@ try:
                     self.no4_display.update_value(sonde_data[NH4_idx])
                     self.no3_display.update_value(sonde_data[NO3_idx])
                     self.DO_display.update_value(sonde_data[ODO_idx])
+                    self.spare2.update_value(sonde_data[temp_idx])
                     log_buffer[11] = sonde_data[pH_idx]
                     log_buffer[12] = sonde_data[orp_idx]
                     log_buffer[13] = sonde_data[NH4_idx]
                     log_buffer[14] = sonde_data[NO3_idx]
                     log_buffer[15] = sonde_data[ODO_idx]
-
-                self.oxygen_display.update_value(f"{oxygen_value}%")
+                    log_buffer[17] = sonde_data[temp_idx]
+                    log_buffer[18] = sonde_data[cond_idx]
+                self.oxygen_display.update_value(f"{oxygen_value}% ({o2_mA} mA)")
                 log_buffer[0] = str(oxygen_value)
                 self.update_status("Running")
                 if not controller.is_connected()and config["controller_enabled"]:
@@ -352,7 +382,7 @@ try:
                 except ValueError:
                     logging_period = 1.0
                 global boot_log
-                if arduino_data != previous_arduino_log_entry or boot_log or current_time - self.last_logged_time >= logging_period:
+                if boot_log or current_time - self.last_logged_time >= logging_period:
                     boot_log = False
                     self.log_data(oxygen_value)
                     self.last_logged_time = current_time
@@ -408,18 +438,21 @@ try:
             today = datetime.date.today()
             global sonde_log_entry
             date_str = today.strftime('%Y-%b-%d')
-            log_file_name = f"../MABR_data/{date_str}.csv"
+            log_file_name = f"/home/cee/Dropbox/MABR_data/{date_str}.csv"
             new_day = False
+           
             if not os.path.exists(log_file_name):
                 new_day = True
             with open(log_file_name, 'a') as log_file:
                 if new_day:
                     # If the log file is new, write an initial log message
-              
-                    initial_log_message = "Timestamp,O\u2082(%),V01,V02,V03,B1,B2,B3,V04,V05,V06,V07,pH,ORP (mV),NO\u2084 (mg/L),NO\u2083 (mg/L),ODO(mg/L)\n"
+                    initial_log_message = "Timestamp,O\u2082(%),V01,V02,V03,B1,B2,B3,V04,V05,V06,V07,pH,ORP (mV),NO\u2084 (mg/L),NO\u2083 (mg/L),ODO(mg/L),Pressure  (psi),Temp(C),Cond(uS/cm),Flow (gpm),Flow Temp (C)\n"
+                    print(initial_log_message)
                     log_file.write(f"{initial_log_message}\n")
-                
-                global log_buffer   
+                global log_buffer
+                uid = int(os.environ.get('SUDO_UID'))
+                gid = int(os.environ.get('SUDO_GID'))
+                os.chown(log_file_name,uid,gid)
                 log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, {','.join(log_buffer)}\n")
         def update_arduino_fields(self, arduino_data):
             arduino_data = arduino_data.strip()  # Remove any whitespace or newline characters
@@ -442,7 +475,17 @@ try:
             if arduino_data.startswith('#'):
                 startup=False
                 hex_values = re.findall('[0-9A-Fa-f]{4}', arduino_data[11:])  # Extract 4-digit hex values
+                pressure = (int(hex_values[8],16)/1024)*config['press_sensor_cal']['slope']+config['press_sensor_cal']['y_intercept']
+                flow = (int(hex_values[9],16)/1024*5)*config['flow_sensor_cal']['slope']+config['flow_sensor_cal']['y_intercept']
+                flow_temp = (int(hex_values[10],16)/1024*5)*config['flow_temp_sensor_cal']['slope']+config['flow_temp_sensor_cal']['y_intercept']
+                log_buffer[16]=str(round(pressure,2))
+                log_buffer[19]=str(round(flow,2))
+                log_buffer[20]=str(round(flow_temp,2))
+                self.opc_pressure.set_value(round(pressure,2))
                 try:
+                    self.spare1_dis.update_value(str(round(pressure,2))+ " (" + str(round(int(hex_values[8],16)/1024,2)) + " V)")
+                    self.flow_display.update_value(str(round(flow,2))+ " (" + str(round(int(hex_values[9],16)/1024*5,2)) + " V)")
+                    self.flow_temp_display.update_value(str(round(flow_temp,2))+ " (" + str(round(int(hex_values[10],16)/1024*5,2)) + " V)")
                     for i in range(len(hex_values)):
                         row = i // 2
                         col = i % 2
@@ -458,10 +501,7 @@ try:
                                 entry_widget.config(bg="green")
                 except:
                     pass
-    # The rest of your existing code goes here
-
-
-    # The rest of your existing code goes here
+    
 
     def on_closing():
         try:
@@ -474,7 +514,10 @@ try:
     if __name__ == "__main__":
         app = App()
         app.protocol("WM_DELETE_WINDOW", on_closing)
-        app.mainloop()
+        try:
+            app.mainloop()
+        finally:
+            app.server.stop()
 except Exception as e:
     traceback.print_exc()
 
